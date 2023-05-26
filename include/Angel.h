@@ -36,7 +36,7 @@
 #else
     #include <GL/glew.h>
 #endif
-#include <GLFW/glfw3.h>GLFW
+#include <GLFW/glfw3.h>
 // Define a helpful macro for handling offsets into buffer objects
 #define BUFFER_OFFSET( offset )   ((GLvoid*) (offset))
 
