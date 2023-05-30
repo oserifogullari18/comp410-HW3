@@ -9,7 +9,7 @@ typedef vec4 color4;
 typedef vec4 point4;
 
 // Ball Bouncing Parameters
-float radius = 0.25;
+float radius = 0.1;
 float ballSpeedX = 0.025;
 float ballSpeedY = 0; // initial vertical velocity
 float ballSpeedZ = 0;
@@ -35,41 +35,80 @@ int color_selection = 0;
 int *color_selection_ptr = &color_selection;
 
 // Define vao vbo and shader variables
-GLuint vPosition;
-GLuint vColor;
+
 GLuint vao;
 GLuint buffer;
+GLuint vao1;
+GLuint buffer1;
 
 // Array of rotation angles (in degrees) for each coordinate axis
 enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
 int Axis = Xaxis;
 GLfloat Theta[NumAxes] = {0.0, 0.0, 0.0};
 
-///////////////// Data for Cube ////////////////////////
-const int NumTrianglesCube = 12;
-// (4 faces)^(NumTimesToSubdivide + 1)
-const int NumVerticesCube = 3 * NumTrianglesCube;
-
-// define point and color array for cube
-point4 pointsCube[NumVerticesCube];
-color4 colorsCube[NumVerticesCube];
-
-// Vertices of a unit cube centered at origin, sides aligned with axes
-point4 verticesCube[8]{point4(-radius, -radius, radius, 1.0),
-                       point4(-radius, radius, radius, 1.0),
-                       point4(radius, radius, radius, 1.0),
-                       point4(radius, -radius, radius, 1.0),
-                       point4(-radius, -radius, -radius, 1.0),
-                       point4(-radius, radius, -radius, 1.0),
-                       point4(radius, radius, -radius, 1.0),
-                       point4(radius, -radius, -radius, 1.0)};
-
 // vertex colors
-color4 vertexColors[2] = {
-    color4(1.0, 1.0, 0.0, 1.0), // yellow
-    color4(0.0, 1.0, 1.0, 1.0)  // cyan
+color4 vertexColors[3] = {
+    color4(1.0, 0.1, 0.1, 1.0), // yellow
+    color4(0.0, 1.0, 1.0, 1.0), // cyan
+    color4(0.8, 0.8, 0.8, 1.0), // black
 };
 
+// Frame cube
+// MaxValues
+
+float MaxValues = 1;
+
+const int NumVerticesFrame =
+    36; //(6 faces)(2 triangles/face)(3 vertices/triangle)
+
+point4 points[NumVerticesFrame];
+color4 colors[NumVerticesFrame];
+
+// Vertices of a unit cube centered at origin, sides aligned with axes
+point4 vertices[8] = {point4(-MaxValues, -MaxValues, MaxValues, 1.0),
+                      point4(-MaxValues, MaxValues, MaxValues, 1.0),
+                      point4(MaxValues, MaxValues, MaxValues, 1.0),
+                      point4(MaxValues, -MaxValues, MaxValues, 1.0),
+                      point4(-MaxValues, -MaxValues, -MaxValues, 1.0),
+                      point4(-MaxValues, MaxValues, -MaxValues, 1.0),
+                      point4(MaxValues, MaxValues, -MaxValues, 1.0),
+                      point4(MaxValues, -MaxValues, -MaxValues, 1.0)};
+
+// quad generates two triangles for each face and assigns colors
+//    to the vertices
+int Index = 0;
+void quad(int a, int b, int c, int d) {
+  // Initialize colors
+
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[a];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[b];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[c];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[a];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[c];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[d];
+  Index++;
+}
+
+// generate 12 triangles: 36 vertices and 36 colors
+void framecube() {
+  // quad(1, 0, 3, 2);
+  // quad(2, 3, 7, 6);
+  quad(3, 0, 4, 7);
+  // quad(6, 5, 1, 2);
+  // quad(4, 5, 6, 7);
+  // quad(5, 4, 0, 1);
+}
 // initialize current color for painting
 color4 paintColor = vertexColors[color_selection];
 
@@ -146,6 +185,8 @@ void tetrahedron(int count, vec4 ballCenter) {
 
 void init() {
 
+  framecube();
+
   tetrahedron(NumTimesToSubdivide,
               BallCenter); // initialize point and color arrays for sphere
 
@@ -153,6 +194,30 @@ void init() {
   GLuint program = InitShader("src/vshader.glsl", "src/fshader.glsl");
   glUseProgram(program);
 
+  // set up vertex arrays
+  GLuint vPosition = glGetAttribLocation(program, "vPosition");
+  GLuint vColor = glGetAttribLocation(program, "vColor");
+
+  glGenVertexArrays(1, &vao1);
+  glBindVertexArray(vao1);
+
+  // Create and bind a vertex array buffer for the big surface ID cube
+  glGenBuffers(1, &buffer1);
+  glBindBuffer(GL_ARRAY_BUFFER, buffer1);
+
+  // Put points and collors for the the big surface ID cube into buffer
+  glBufferData(GL_ARRAY_BUFFER, sizeof(points) + sizeof(colors), NULL,
+               GL_STATIC_DRAW);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points), points);
+  glBufferSubData(GL_ARRAY_BUFFER, sizeof(points), sizeof(colors), colors);
+
+  glEnableVertexAttribArray(vPosition);
+  glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+  glEnableVertexAttribArray(vColor);
+  glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
+                        BUFFER_OFFSET(sizeof(points)));
+
+  // Ball
   // Create and bind a vertex array object
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
@@ -170,12 +235,10 @@ void init() {
   glBufferSubData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE), sizeof(colorsSPHERE),
                   colorsSPHERE);
   // set up position arrays with shaders
-  vPosition = glGetAttribLocation(program, "vPosition");
   glEnableVertexAttribArray(vPosition);
   // Vertex Attribute Pointer for points
   glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
   // set up color arrays with shaders
-  vColor = glGetAttribLocation(program, "vColor");
   glEnableVertexAttribArray(vColor);
   // Vertex Attribute Pointer for colors
   glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
@@ -210,6 +273,14 @@ void init() {
 void display(void) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  // projection matrix for camera setting camera
+  mat4 projection;
+  projection = (Perspective(45, (GLfloat)WIDTH / (GLfloat)HEIGHT, 0.1, 50.0) *
+                Translate(vec3(0.0, 0.0, -4)) * RotateX(Theta[Xaxis]) *
+                RotateY(Theta[Yaxis]) * RotateZ(Theta[Zaxis]) *
+                Translate(vec3(0.0, 0.0, 0.0)));
+  glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
+
   //  Generate the model-view matrix
   const vec3 displacement(h_current_ptr->x, h_current_ptr->y, h_current_ptr->z);
   mat4 model_view =
@@ -224,26 +295,25 @@ void display(void) {
   h_current_ptr->y =
       h_current_ptr->y + ballSpeedY * dt - 0.5 * gravitiy * pow(dt, 2);
   // handle the case in which the ball hit to the ground
-  if (h_current_ptr->y < -1) {
-    h_current_ptr->y = -1;
+  if (h_current_ptr->y < -1 + radius) {
+    h_current_ptr->y = -1 + radius;
     ballSpeedY = -ballSpeedY * rho;
   } else {
     ballSpeedY = ballSpeedY - gravitiy * dt;
   }
 
+  // draw ball
   glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
-
-  // projection matrix for camera setting camera
-  mat4 projection;
-  projection = (Perspective(45, (GLfloat)WIDTH / (GLfloat)HEIGHT, 5, 20.0) *
-                Translate(vec3(0.0, 0.0, -5.0)) * RotateX(Theta[Xaxis]) *
-                RotateY(Theta[Yaxis]) * RotateZ(Theta[Zaxis]) *
-                Translate(vec3(0.0, 0.0, 0.0)));
-  glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
-  // draw mode depending on the object shape type
   glBindVertexArray(vao);
   glDrawArrays(draw_mode, 0, NumVerticesSPHERE);
 
+  model_view = (Translate(0, 0, 0) * Scale(1.0, 1.0, 1.0) * RotateX(0) *
+                RotateY(0) * RotateZ(0));
+  glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
+
+  // Frame Cube
+  glBindVertexArray(vao1);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
   glFlush();
 }
 
