@@ -2,15 +2,15 @@
 //  Display a rotating cube
 //
 
-
 #include "Angel.h"
 #include <cmath>
 #include <unistd.h>
+
 typedef vec4 color4;
 typedef vec4 point4;
 
 // Ball Bouncing Parameters
-float radius = 0.25;
+float radius = 0.1;
 float ballSpeedX = 0.025;
 float ballSpeedY = 0; // initial vertical velocity
 float ballSpeedZ = 0;
@@ -31,6 +31,16 @@ GLenum draw_mode = GL_TRIANGLES;
 bool isSolid = true;
 // shape type
 
+
+// Texture
+GLuint textures[2];
+GLubyte basketballImg[512][256][3];
+GLubyte earthImg[2048][1024][3];
+
+int textureFlag = 0; //toggle texture mapping
+GLuint  TextureFlagLoc;
+
+
 // Color selection modes
 int color_selection = 0;
 int *color_selection_ptr = &color_selection;
@@ -42,93 +52,74 @@ GLuint buffer;
 GLuint vao1;
 GLuint buffer1;
 
-
-// vertex colors
-color4 vertexColors[3] = {
-    color4(1.0, 1.0, 0.0, 1.0), // yellow
-    color4(0.0, 1.0, 1.0, 1.0),  // cyan
-    color4( 0.0, 0.0, 0.0, 1.0 ),  // black
-};
-
-// Frame cube
-
-// MaxValues
-
-float MaxValues = 0.5;
-
-const int NumVerticesFrame = 36;//(6 faces)(2 triangles/face)(3 vertices/triangle)
-
-point4 points[NumVerticesFrame];
-color4 colors[NumVerticesFrame];
-
-GLuint cube_indices[] = {
-        0, 1, 3,
-        2, 3, 0,
-        1, 5, 6,
-        6, 2, 1,
-        7, 6, 5,
-        5, 4, 7,
-        4, 0, 3,
-        3, 7, 4,
-        4, 5, 1,
-        1, 0, 4,
-        3, 2, 6,
-        6, 7, 3
-    };
-
-// Vertices of a unit cube centered at origin, sides aligned with axes
-point4 vertices[8] = {
-    point4( -MaxValues, -MaxValues,  MaxValues, 1.0 ),
-    point4( -MaxValues,  MaxValues,  MaxValues, 1.0 ),
-    point4(  MaxValues,  MaxValues,  MaxValues, 1.0 ),
-    point4(  MaxValues, -MaxValues,  MaxValues, 1.0 ),
-    point4( -MaxValues, -MaxValues, -MaxValues, 1.0 ),
-    point4( -MaxValues,  MaxValues, -MaxValues, 1.0 ),
-    point4(  MaxValues,  MaxValues, -MaxValues, 1.0 ),
-    point4(  MaxValues, -MaxValues, -MaxValues, 1.0 )
-};
-
-// quad generates two triangles for each face and assigns colors
-//    to the vertices
-int Index = 0;
-void quad( int a, int b, int c, int d )
-{
-    // Initialize colors
-    
-    colors[Index] = vertexColors[2]; points[Index] = vertices[a]; Index++;
-    colors[Index] = vertexColors[2]; points[Index] = vertices[b]; Index++;
-    colors[Index] = vertexColors[2]; points[Index] = vertices[c]; Index++;
-    colors[Index] = vertexColors[2]; points[Index] = vertices[a]; Index++;
-    colors[Index] = vertexColors[2]; points[Index] = vertices[c]; Index++;
-    colors[Index] = vertexColors[2]; points[Index] = vertices[d]; Index++;
-}
-
-
-// generate 12 triangles: 36 vertices and 36 colors
-void
-framecube()
-{
-    quad( 1, 0, 3, 2 );
-    quad( 2, 3, 7, 6 );
-    quad( 3, 0, 4, 7 );
-    quad( 6, 5, 1, 2 );
-    quad( 4, 5, 6, 7 );
-    quad( 5, 4, 0, 1 );
-}
-
-
-
-
-
 // Array of rotation angles (in degrees) for each coordinate axis
 enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
 int Axis = Xaxis;
 GLfloat Theta[NumAxes] = {0.0, 0.0, 0.0};
 
+// vertex colors
+color4 vertexColors[3] = {
+    color4(1.0, 0.1, 0.1, 1.0), // yellow
+    color4(0.0, 1.0, 1.0, 1.0), // cyan
+    color4(0.8, 0.8, 0.8, 1.0), // black
+};
 
+// Frame cube
+// MaxValues
 
+float MaxValues = 1;
 
+const int NumVerticesFrame =
+    36; //(6 faces)(2 triangles/face)(3 vertices/triangle)
 
+point4 points[NumVerticesFrame];
+color4 colors[NumVerticesFrame];
+
+// Vertices of a unit cube centered at origin, sides aligned with axes
+point4 vertices[8] = {point4(-MaxValues, -MaxValues, MaxValues, 1.0),
+                      point4(-MaxValues, MaxValues, MaxValues, 1.0),
+                      point4(MaxValues, MaxValues, MaxValues, 1.0),
+                      point4(MaxValues, -MaxValues, MaxValues, 1.0),
+                      point4(-MaxValues, -MaxValues, -MaxValues, 1.0),
+                      point4(-MaxValues, MaxValues, -MaxValues, 1.0),
+                      point4(MaxValues, MaxValues, -MaxValues, 1.0),
+                      point4(MaxValues, -MaxValues, -MaxValues, 1.0)};
+
+// quad generates two triangles for each face and assigns colors
+//    to the vertices
+int Index = 0;
+void quad(int a, int b, int c, int d) {
+  // Initialize colors
+
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[a];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[b];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[c];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[a];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[c];
+  Index++;
+  colors[Index] = vertexColors[2];
+  points[Index] = vertices[d];
+  Index++;
+}
+
+// generate 12 triangles: 36 vertices and 36 colors
+void framecube() {
+  // quad(1, 0, 3, 2);
+  // quad(2, 3, 7, 6);
+  quad(3, 0, 4, 7);
+  // quad(6, 5, 1, 2);
+  // quad(4, 5, 6, 7);
+  // quad(5, 4, 0, 1);
+}
 // initialize current color for painting
 color4 paintColor = vertexColors[color_selection];
 
@@ -204,45 +195,41 @@ void tetrahedron(int count, vec4 ballCenter) {
 }
 
 void init() {
-    
+
   framecube();
 
   tetrahedron(NumTimesToSubdivide,
               BallCenter); // initialize point and color arrays for sphere
-    
 
   // Load shaders and use the resulting shader program
   GLuint program = InitShader("/Users/ozlemserifogullari/Documents/comp410/HW3/HW3/HW3/vshader.glsl", "/Users/ozlemserifogullari/Documents/comp410/HW3/HW3/HW3/fshader.glsl");
   glUseProgram(program);
-    
-    // set up vertex arrays
-    GLuint vPosition = glGetAttribLocation( program, "vPosition" );
-    GLuint vColor = glGetAttribLocation( program, "vColor" );
-    
-    glGenVertexArrays(1, &vao1);
-    glBindVertexArray(vao1);
 
-    // Create and bind a vertex array buffer for the big surface ID cube
-    glGenBuffers(1, &buffer1);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer1);
+  // set up vertex arrays
+  GLuint vPosition = glGetAttribLocation(program, "vPosition");
+  GLuint vColor = glGetAttribLocation(program, "vColor");
 
-    // Put points and collors for the the big surface ID cube into buffer
-    glBufferData(GL_ARRAY_BUFFER,
-                 sizeof(points) + sizeof(colors), NULL,
-                 GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points),
-                    points);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(points),
-                    sizeof(colors), colors);
+  glGenVertexArrays(1, &vao1);
+  glBindVertexArray(vao1);
 
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
-    glEnableVertexAttribArray(vColor);
-    glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
-                          BUFFER_OFFSET(sizeof(points)));
-  
-    // Ball
-    // Create and bind a vertex array object
+  // Create and bind a vertex array buffer for the big surface ID cube
+  glGenBuffers(1, &buffer1);
+  glBindBuffer(GL_ARRAY_BUFFER, buffer1);
+
+  // Put points and collors for the the big surface ID cube into buffer
+  glBufferData(GL_ARRAY_BUFFER, sizeof(points) + sizeof(colors), NULL,
+               GL_STATIC_DRAW);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points), points);
+  glBufferSubData(GL_ARRAY_BUFFER, sizeof(points), sizeof(colors), colors);
+
+  glEnableVertexAttribArray(vPosition);
+  glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
+  glEnableVertexAttribArray(vColor);
+  glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
+                        BUFFER_OFFSET(sizeof(points)));
+
+  // Ball
+  // Create and bind a vertex array object
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
 
@@ -267,11 +254,36 @@ void init() {
   // Vertex Attribute Pointer for colors
   glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
                         BUFFER_OFFSET(sizeof(pointsSPHERE)));
+    
+  glGenTextures(2, textures);
+  glBindTexture(GL_TEXTURE_2D, textures[0]);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 512, 256, 0, GL_RGB, GL_UNSIGNED_BYTE, basketballImg);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+  glBindTexture(GL_TEXTURE_2D, textures[1]);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2048, 1024, 0, GL_RGB, GL_UNSIGNED_BYTE, earthImg);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+  //defining texture to use
+  glBindTexture(GL_TEXTURE_2D, textures[0]);
+    
+  // Retrive texture from program
+  TextureFlagLoc = glGetUniformLocation(program, "TextureFlag");
+  glUniform1i(TextureFlagLoc, textureFlag);
 
   // Retrieve transformation uniform variable locations
   ModelView = glGetUniformLocation(program, "ModelView");
   Projection = glGetUniformLocation(program, "Projection");
 
+  glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
 
   // specify the color to clear the screen
@@ -297,6 +309,14 @@ void init() {
 void display(void) {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+  // projection matrix for camera setting camera
+  mat4 projection;
+  projection = (Perspective(45, (GLfloat)WIDTH / (GLfloat)HEIGHT, 0.1, 50.0) *
+                Translate(vec3(0.0, 0.0, -4)) * RotateX(Theta[Xaxis]) *
+                RotateY(Theta[Yaxis]) * RotateZ(Theta[Zaxis]) *
+                Translate(vec3(0.0, 0.0, 0.0)));
+  glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
+
   //  Generate the model-view matrix
   const vec3 displacement(h_current_ptr->x, h_current_ptr->y, h_current_ptr->z);
   mat4 model_view =
@@ -305,43 +325,37 @@ void display(void) {
        RotateZ(Theta[Zaxis])); // Scale(), Translate(), RotateX(), RotateY(),
                                // RotateZ(): user-defined functions in mat.h
 
+  // horizontal movement
+  h_current_ptr->x = h_current_ptr->x + ballSpeedX * dt;
+  // horizontal movement with gravity
+  h_current_ptr->y =
+      h_current_ptr->y + ballSpeedY * dt - 0.5 * gravitiy * pow(dt, 2);
+  // handle the case in which the ball hit to the ground
+  if (h_current_ptr->y < -1 + radius) {
+    h_current_ptr->y = -1 + radius;
+    ballSpeedY = -ballSpeedY * rho;
+  } else {
+    ballSpeedY = ballSpeedY - gravitiy * dt;
+  }
 
+  // draw ball
+  glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
+  glBindVertexArray(vao);
 
-// Frame Cube
-    glBindVertexArray( vao1 );
-    glDrawArrays(GL_LINES, 0, NumVerticesFrame);
+  // add texture to the ball
+  glBindTexture(GL_TEXTURE_2D, textures[0]);
+  textureFlag = 1;
+  glUniform1i(TextureFlagLoc, textureFlag);
     
-
-
-    
-    // horizontal movement
-    h_current_ptr->x = h_current_ptr->x + ballSpeedX * dt;
-    // horizontal movement with gravity
-    h_current_ptr->y =
-        h_current_ptr->y + ballSpeedY * dt - 0.5 * gravitiy * pow(dt, 2);
-    // handle the case in which the ball hit to the ground
-    if (h_current_ptr->y < -1) {
-      h_current_ptr->y = -1;
-      ballSpeedY = -ballSpeedY * rho;
-    } else {
-      ballSpeedY = ballSpeedY - gravitiy * dt;
-    }
-    
-  // projection matrix for camera setting camera
-  mat4 projection;
-  projection = (Perspective(45, (GLfloat)WIDTH / (GLfloat)HEIGHT, 5, 20.0) *
-                Translate(vec3(0.0, 0.0, -5.0)) * RotateX(Theta[Xaxis]) *
-                RotateY(Theta[Yaxis]) * RotateZ(Theta[Zaxis]) *
-                Translate(vec3(0.0, 0.0, 0.0)));
-    
-  glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
-  
-// Ball
-    glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
-    glBindVertexArray(vao);
-    // draw mode depending on the object shape type
   glDrawArrays(draw_mode, 0, NumVerticesSPHERE);
 
+  model_view = (Translate(0, 0, 0) * Scale(1.0, 1.0, 1.0) * RotateX(0) *
+                RotateY(0) * RotateZ(0));
+  glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
+
+  // Frame Cube
+  glBindVertexArray(vao1);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
   glFlush();
 }
 
@@ -456,10 +470,81 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
   glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
 }
 
+
+//---------------------------------------------------------------------
+// Read basketball file
+
+int filedata;
+FILE* FileToRead;
+
+void ReadFileBasketball()
+{
+    int data1, data2, data3;
+    char buffer[100];
+    int red, green, blue;
+    const char* fileName = "/Users/ozlemserifogullari/Downloads/hw3/basketball.ppm";
+    printf("File %s is reading \n", fileName);
+    FileToRead = fopen(fileName, "r");
+    filedata = fscanf(FileToRead, "%d %d %d", &data2, &data3, &data1);
+    for (int i = data2 - 1; i > -1; i--)
+    {
+        for (int j = 0; j < data3; j++)
+        {
+            //reading the bytes of basketball img and putting them into the basketball image matrix
+            filedata = fscanf(FileToRead, "%d %d %d", &red, &green, &blue);
+            basketballImg[i][j][0] = (GLubyte)red;
+            basketballImg[i][j][1] = (GLubyte)green;
+            basketballImg[i][j][2] = (GLubyte)blue;
+        }
+    }
+    printf("Reading %s file is done! \n", fileName);
+
+}
+
+//---------------------------------------------------------------------
+// Read Earth file
+
+void ReadFileEarth()
+{
+    int data1, data2, data3;
+    char c;
+    char buffer[100];
+    int red, green, blue;
+    const char* fileName = "/Users/ozlemserifogullari/Downloads/hw3/earth.ppm";
+    printf("File %s is reading \n", fileName);
+    // I am reading the earth.ppm and putting the color values in earth image matrix
+    FileToRead = fopen(fileName, "r");
+    filedata = fscanf(FileToRead, "%[^\n] ", buffer);
+    filedata = fscanf(FileToRead, "%c", &c);
+    while (c == '#')
+    {
+        filedata = fscanf(FileToRead, "%[^\n] ", buffer);
+        printf("%s\n", buffer);
+        filedata = fscanf(FileToRead, "%c", &c);
+    }
+    ungetc(c, FileToRead);
+    filedata = fscanf(FileToRead, "%d %d %d", &data2, &data3, &data1);
+    for (int i = data2 - 1; i > -1; i--) {
+        for (int j = 0; j < data3; j++) {
+            filedata = fscanf(FileToRead, "%d %d %d", &red, &green, &blue);
+            earthImg[i][j][0] = (GLubyte)red;
+            earthImg[i][j][1] = (GLubyte)green;
+            earthImg[i][j][2] = (GLubyte)blue;
+        }
+    }
+    printf("Reading %s file is done! \n", fileName);
+
+}
+
+
 //---------------------------------------------------------------------
 // main
 
 int main() {
+    
+  ReadFileEarth();
+  ReadFileBasketball();
+    
   if (!glfwInit())
     exit(EXIT_FAILURE);
 
