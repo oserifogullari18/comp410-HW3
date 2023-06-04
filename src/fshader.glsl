@@ -40,13 +40,9 @@ void main()
             specular = vec4(0.0, 0.0, 0.0, 1.0);
         }
 
-    if(TextureFlag){
-   fcolor = texture(tex, texCoord) + ambient + diffuse + specular;
-   fcolor.a = 1.0;}
-   else{
+
     fcolor = ambient + diffuse + specular;
         fcolor.a = 1.0;
-   }
 }   
 } 
 

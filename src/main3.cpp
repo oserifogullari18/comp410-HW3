@@ -5,12 +5,13 @@
 #include "Angel.h"
 #include <cmath>
 #include <unistd.h>
+#include <vector>
 typedef vec4 color4;
 typedef vec4 point4;
 
 // Ball Bouncing Parameters
 float radius = 0.2;
-float ballSpeedX = 0.02;
+float ballSpeedX = 0.01;
 float ballSpeedY = 0; // initial vertical velocity
 float ballSpeedZ = 0;
 float gravitiy = 0.0098; // constant acceleration
@@ -35,7 +36,7 @@ GLuint bufferSphere;
 GLuint vaoGround;
 GLuint bufferGround;
 // Model-view and projection matrices uniform location
-GLuint ModelView, Projection, Lighting;
+GLuint ModelView, Projection;
 bool lighting = true; // enable lighting
 int ReflectionMode = 0;
 // true --> Gouraud
@@ -44,8 +45,6 @@ GLfloat scaleFactor = 1.0;
 
 // Array of rotation angles (in degrees) for each coordinate axis
 enum { Xaxis = 0, Yaxis = 1, Zaxis = 2, NumAxes = 3 };
-enum { Wireframe = 0, Shading = 1, Texture = 2 };
-int DisplayMode = Wireframe;
 GLfloat Theta[NumAxes] = {0.0, 0.0, 0.0};
 
 // vertex colors
@@ -124,12 +123,14 @@ const int NumVerticesSPHERE = 3 * NumTriangles;
 // define point and color arrays for sphere
 point4 pointsSPHERE[NumVerticesSPHERE];
 vec3 normalsSPHERE[NumVerticesSPHERE];
+std::vector<vec2> textureCoordinates;
 
 // function definitions to create sphere
 int IndexSPHERE = 0;
 
 void triangle(const point4 &a, const point4 &b, const point4 &c) {
   // normal vector is computed per vertex
+  // 	vec3  normal = normalize(cross(b - a, c - b));
   vec3 norm = normalize(vec3(a.x, a.y, a.z));
   normalsSPHERE[IndexSPHERE] = vec3(norm.x, norm.y, norm.z);
   pointsSPHERE[IndexSPHERE] = a;
@@ -178,6 +179,13 @@ void tetrahedron(int count, vec4 ballCenter) {
   divide_triangle(v[0], v[2], v[3], count);
 
   for (int i = 0; i < NumVerticesSPHERE; i++) {
+    float a = (0.5 + ((atan2(points[i].z, points[i].x)) / (2 * M_PI)));
+    float b = (0.5 + ((asin(points[i].y)) / M_PI));
+    vec2 coor(a, b);
+    textureCoordinates.push_back(coor);
+  }
+
+  for (int i = 0; i < NumVerticesSPHERE; i++) {
     pointsSPHERE[i] =
         vec4(pointsSPHERE[i].x * (radius), pointsSPHERE[i].y * (radius),
              pointsSPHERE[i].z * (radius), 1.0);
@@ -187,8 +195,7 @@ void tetrahedron(int count, vec4 ballCenter) {
   }
 }
 
-GLuint program, vNormal, vPosition, vColor;
-GLuint vertexTextCoordinates;
+GLuint program, vNormal, vPosition, vColor, vertexTextCoordinates;
 
 struct MaterialProperties {
   color4 material_ambient;
@@ -239,14 +246,18 @@ void Materials() {
 
 void SelectSphereBuffer() {
   glBindBuffer(GL_ARRAY_BUFFER, bufferSphere);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE) + sizeof(normalsSPHERE),
-               NULL, GL_STATIC_DRAW);
   glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pointsSPHERE), pointsSPHERE);
   glBufferSubData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE), sizeof(normalsSPHERE),
                   normalsSPHERE);
+  glBufferSubData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE) + sizeof(normalsSPHERE),
+                  sizeof(vec2) * textureCoordinates.size(),
+                  &textureCoordinates[0]);
   glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
   glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0,
                         BUFFER_OFFSET(sizeof(pointsSPHERE)));
+  glVertexAttribPointer(
+      vertexTextCoordinates, 2, GL_FLOAT, GL_FALSE, 0,
+      BUFFER_OFFSET(sizeof(pointsSPHERE) + sizeof(normalsSPHERE)));
 }
 
 point4 light_position(-1.5, 1.5, 1.5, 1.0);
@@ -282,6 +293,40 @@ void AssignLights() {
   glUniform1f(glGetUniformLocation(program, "Shininess"), material_shininess);
 }
 
+int textureFlag = 0; // toggle texture mapping
+GLuint TextureFlagLoc;
+GLuint textures[2];
+GLubyte basketballImg[512][256][3];
+GLubyte earthImg[2048][1024][3];
+
+int DisplayModeIndex = 0;
+// changing texture modes.
+void ChangeDisplayMode() {
+  DisplayModeIndex++;
+  if (DisplayModeIndex > 3)
+    DisplayModeIndex = 0;
+
+  if (DisplayModeIndex == 0) {
+    std::cout << "Display Mode: Shading" << std::endl;
+    textureFlag = 0;
+    glUniform1i(TextureFlagLoc, textureFlag);
+  } else if (DisplayModeIndex == 1) {
+    std::cout << "Display Mode: Texture Baseball" << std::endl;
+    glBindTexture(GL_TEXTURE_2D, textures[0]);
+    textureFlag = 1;
+    glUniform1i(TextureFlagLoc, textureFlag);
+  } else if (DisplayModeIndex == 2) {
+    std::cout << "Display Mode: Texture World" << std::endl;
+    glBindTexture(GL_TEXTURE_2D, textures[1]);
+    textureFlag = 1;
+    glUniform1i(TextureFlagLoc, textureFlag);
+  } else {
+    std::cout << "Display Mode: Wireframe" << std::endl;
+    textureFlag = 0;
+    glUniform1i(TextureFlagLoc, textureFlag);
+  }
+}
+
 // changing shading types.
 int shading_mode = 0; // 0-phong 1-gouraud 2-off 3-modified phong
 void ChangeShadingType() {
@@ -310,6 +355,27 @@ void init() {
   Materials();
   tetrahedron(NumTimesToSubdivide, BallCenter);
 
+  glGenTextures(2, textures);
+  glBindTexture(GL_TEXTURE_2D, textures[0]);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 512, 256, 0, GL_RGB, GL_UNSIGNED_BYTE,
+               basketballImg);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                  GL_LINEAR_MIPMAP_LINEAR);
+
+  glBindTexture(GL_TEXTURE_2D, textures[1]);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 2048, 1024, 0, GL_RGB,
+               GL_UNSIGNED_BYTE, earthImg);
+  glGenerateMipmap(GL_TEXTURE_2D);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                  GL_LINEAR_MIPMAP_LINEAR);
+
   // Load shaders and use the resulting shader program
   program = InitShader("vshader.glsl", "fshader.glsl");
   glUseProgram(program);
@@ -319,22 +385,26 @@ void init() {
   vColor = glGetAttribLocation(program, "vColor");
   vNormal = glGetAttribLocation(program, "vNormal");
   glUniform1i(glGetUniformLocation(program, "ShadingType"), shading_mode);
+  vertexTextCoordinates = glGetAttribLocation(program, "vTexCoord");
+  TextureFlagLoc = glGetUniformLocation(program, "TextureFlag");
+  glUniform1i(TextureFlagLoc, textureFlag);
+
   // generate VAO for ground
   // glGenVertexArrays(1, &vaoGround);
-  // // bind VAO
+  // bind VAO
   // glBindVertexArray(vaoGround);
 
-  // // Create and bind a vertex array buffer for the ground
+  // Create and bind a vertex array buffer for the ground
   // glGenBuffers(1, &bufferGround);
   // glBindBuffer(GL_ARRAY_BUFFER, bufferGround);
 
-  // //  create a new data store for a buffer object. (size = points+colors )
-  // // don't put daya(NULL)
+  //  create a new data store for a buffer object. (size = points+colors )
+  // don't put data(NULL)
   // glBufferData(GL_ARRAY_BUFFER, sizeof(points) + sizeof(colors), NULL,
   //              GL_STATIC_DRAW);
-  // // put points to 0-points
+  // put points to 0-points
   // glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(points), points);
-  // // put colors points-colors
+  // put colors points-colors
   // glBufferSubData(GL_ARRAY_BUFFER, sizeof(points), sizeof(colors), colors);
 
   // glEnableVertexAttribArray(vPosition);
@@ -342,8 +412,6 @@ void init() {
   // BUFFER_OFFSET(0)); glEnableVertexAttribArray(vColor);
   // glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
   //                       BUFFER_OFFSET(sizeof(points)));
-
-  // vNormal = glGetAttribLocation(program, "vNormal");
   // glEnableVertexAttribArray(vNormal);
   // glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0,
   //                       BUFFER_OFFSET(sizeof(points)));
@@ -358,13 +426,20 @@ void init() {
   glBindBuffer(GL_ARRAY_BUFFER, bufferSphere);
 
   // initialize buffer for data
-  glBufferData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE) + sizeof(normalsSPHERE),
+  glBufferData(GL_ARRAY_BUFFER,
+               sizeof(pointsSPHERE) + sizeof(normalsSPHERE) +
+                   sizeof(vec2) * textureCoordinates.size(),
                NULL, GL_STATIC_DRAW);
   // put points array into buffer
   glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pointsSPHERE), pointsSPHERE);
-  // put color array into buffer
+  // put normal array into buffer
   glBufferSubData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE), sizeof(normalsSPHERE),
                   normalsSPHERE);
+  // put texture coordinates vector into buffer
+  glBufferSubData(GL_ARRAY_BUFFER, sizeof(pointsSPHERE) + sizeof(normalsSPHERE),
+                  sizeof(vec2) * textureCoordinates.size(),
+                  &textureCoordinates[0]);
+
   // set up position arrays with shaders
   glEnableVertexAttribArray(vPosition);
   // Vertex Attribute Pointer for points
@@ -373,13 +448,18 @@ void init() {
   glEnableVertexAttribArray(vNormal);
   glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0,
                         BUFFER_OFFSET(sizeof(pointsSPHERE)));
+  glEnableVertexAttribArray(vertexTextCoordinates);
+  glVertexAttribPointer(
+      vertexTextCoordinates, 2, GL_FLOAT, GL_FALSE, 0,
+      BUFFER_OFFSET(sizeof(pointsSPHERE) + sizeof(normalsSPHERE)));
 
   AssignLights();
   // Retrieve transformation uniform variable locations
   ModelView = glGetUniformLocation(program, "ModelView");
   Projection = glGetUniformLocation(program, "Projection");
-  glEnable(GL_CULL_FACE);
+  // glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
+
   // specify the color to clear the screen
   glClearColor(0.3, 0.3, 0.3, 0.3);
 }
@@ -422,28 +502,24 @@ void display(void) {
     ballSpeedY = ballSpeedY - gravitiy * dt;
   }
 
-  glUniform1i(glGetUniformLocation(program, "ShadingType"), shading_mode);
-  // glUniform1i(TextureFlagLoc, textureFlag);
   // draw ball
   glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
   SelectSphereBuffer();
   // glBindVertexArray(vaoSphere);
-  if (lighting)
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  else
+  if (DisplayModeIndex == 3) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  } else {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  }
 
   glDrawArrays(GL_TRIANGLES, 0, NumVerticesSPHERE);
 
-  // draw ground
-  model_view =
-      (Translate(0, 0, 0) * Scale(scaleFactor, scaleFactor, scaleFactor) *
-       RotateX(0) * RotateY(0) * RotateZ(0));
-  glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
-
-  // Frame Cube
+  // // draw ground
+  // model_view =
+  //     (Translate(0, 0, 0) * Scale(scaleFactor, scaleFactor, scaleFactor) *
+  //      RotateX(0) * RotateY(0) * RotateZ(0));
+  // glUniformMatrix4fv(ModelView, 1, GL_TRUE, model_view);
   // glBindVertexArray(vaoGround);
-
   // glDrawArrays(GL_TRIANGLES, 0, 6);
   glFlush();
 }
@@ -466,7 +542,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
         *color_selection_ptr = 0;
       }
       paintColor = vertexColors[*color_selection_ptr];
-      init();
       break;
 
     case GLFW_KEY_L:
@@ -478,14 +553,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
         std::cout << "Move Light" << std::endl;
       }
       break;
-
-      // if (action == GLFW_PRESS) {
-      //   if (lighting == true)
-      //     lighting = false;
-      //   else
-      //     lighting = true;
-      // }
-      // break;
 
     case GLFW_KEY_DOWN:
       Theta[Xaxis] += 10.0;
@@ -562,9 +629,10 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action,
 
     case GLFW_KEY_S:
       ChangeShadingType();
-
       break;
-
+    case GLFW_KEY_T:
+      ChangeDisplayMode();
+      break;
     case GLFW_KEY_I:
       // move the object to the initial position
       h_current_ptr->x = -1;
@@ -610,9 +678,9 @@ void mouse_button_callback(GLFWwindow *window, int button, int action,
 }
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
-  glViewport(0, 0, width,
-             height); // may not need this since the default is usually the
-                      // window size
+  glViewport(
+      0, 0, width,
+      height); // may not need this since the default is usually the window size
 
   // Set projection matrix
   mat4 projection;
@@ -627,9 +695,69 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
   glUniformMatrix4fv(Projection, 1, GL_TRUE, projection);
 }
 
+int filedata;
+FILE *FileToRead;
+
+// reading the basketball file here
+void ReadFileBasketball() {
+  int data1, data2, data3;
+  char c;
+  char buffer[100];
+  int red, green, blue;
+  const char *fileName = "basketball.png";
+  printf("File %s is reading \n", fileName);
+  FileToRead = fopen(fileName, "r");
+  filedata = fscanf(FileToRead, "%d %d %d", &data2, &data3, &data1);
+  for (int i = data2 - 1; i > -1; i--) {
+    for (int j = 0; j < data3; j++) {
+      // reading the bytes of basketball img and putting them into the
+      // basketball image matrix
+      filedata = fscanf(FileToRead, "%d %d %d", &red, &green, &blue);
+      basketballImg[i][j][0] = (GLubyte)red;
+      basketballImg[i][j][1] = (GLubyte)green;
+      basketballImg[i][j][2] = (GLubyte)blue;
+    }
+  }
+  printf("Reading %s file is done! \n", fileName);
+}
+
+// reading the earth file here
+void ReadFileEarth() {
+  int data1, data2, data3;
+  char c;
+  char buffer[100];
+  int red, green, blue;
+  const char *fileName = "earth.ppm";
+  printf("File %s is reading \n", fileName);
+  // I am reading the earth.ppm and putting the color values in earth image
+  // matrix
+  FileToRead = fopen(fileName, "r");
+  filedata = fscanf(FileToRead, "%[^\n] ", buffer);
+  filedata = fscanf(FileToRead, "%c", &c);
+  while (c == '#') {
+    filedata = fscanf(FileToRead, "%[^\n] ", buffer);
+    printf("%s\n", buffer);
+    filedata = fscanf(FileToRead, "%c", &c);
+  }
+  ungetc(c, FileToRead);
+  filedata = fscanf(FileToRead, "%d %d %d", &data2, &data3, &data1);
+  for (int i = data2 - 1; i > -1; i--) {
+    for (int j = 0; j < data3; j++) {
+      filedata = fscanf(FileToRead, "%d %d %d", &red, &green, &blue);
+      earthImg[i][j][0] = (GLubyte)red;
+      earthImg[i][j][1] = (GLubyte)green;
+      earthImg[i][j][2] = (GLubyte)blue;
+    }
+  }
+  printf("Reading %s file is done! \n", fileName);
+}
+
 int main() {
   if (!glfwInit())
     exit(EXIT_FAILURE);
+
+  ReadFileEarth();
+  ReadFileBasketball();
 
   // Setup opengl versions
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
